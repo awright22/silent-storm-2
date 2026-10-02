@@ -1,0 +1,7 @@
+# Copy to ss2.local.toml (gitignored) and point these at your machine.
+
+[paths]
+# Your own Silent Storm install (Steam or GOG). Only ever read, never written.
+retail = "C:/Program Files (x86)/Steam/steamapps/common/Silent Storm"
+# Checkout of the ported engine; Game.exe is taken from <engine>/build.
+engine = "C:/src/Silent-Storm/port"

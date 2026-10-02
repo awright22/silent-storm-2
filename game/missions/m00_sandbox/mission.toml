@@ -1,0 +1,41 @@
+# Pipeline test mission: the retail City Bank level with SS2's own units,
+# waypoints and script. Not part of the campaign.
+slot = 1
+name = "m00_sandbox"
+shell = 6213            # retail variant "GFirst" (City Bank, 56x48 tiles)
+keep_waypoints = true   # reuse the shell's deploy points (UnitHero, Unit1..6)
+
+[[waypoint]]
+name = "ss2_gate"
+pos = [28.0, 20.0]
+
+[[unit]]
+name = "raider1"
+pers = 735              # CivilEvilMale#3
+pos = [27, 17]
+rotation = 270.0
+player = 2
+group = "raiders"
+
+[[unit]]
+name = "raider2"
+pers = 735
+pos = [30, 17]
+rotation = 270.0
+player = 2
+group = "raiders"
+
+[[unit]]
+name = "raider_boss"
+pers = 440              # CivilEvilMale#4
+pos = [29, 15]
+rotation = 270.0
+player = 2
+group = "raiders"
+
+[[camera]]
+name = "gate"
+anchor = [28.0, 19.0, 0.0]
+yaw = -0.8
+pitch = -0.75
+distance = 24.0

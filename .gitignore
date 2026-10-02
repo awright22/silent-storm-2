@@ -137,3 +137,8 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.lnk
+
+# === Silent Storm 2 ===
+# machine-specific paths
+ss2.local.toml
+__pycache__/
