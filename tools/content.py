@@ -34,8 +34,12 @@ PLACEMENT_TABLES = {
 }
 VARIANT_PACKS = ('Terrain', 'Buildings')    # resources keyed by variant ID
 
-# Player slots as the engine numbers them: 0 is the human player.
 POSES = ('Stand', 'Crouch', 'Crawl')
+
+# What the retail fonts can draw: ASCII, Cyrillic and a few typographic marks.
+# Accented Latin letters are missing and render as a placeholder box.
+DIALOGUE_CHARS = (set(map(chr, range(0x20, 0x7F))) | set(map(chr, range(0x410, 0x450))) | set('ЁёІіЇїЄє')
+                  | set('‘’“”–—…«»№™'))
 
 
 class Build:
@@ -90,6 +94,13 @@ def waypoint_resource(x, y, z=0.0, floor=0, rotation=0):
     body = (emit(2, struct.pack('<fff', x, y, z)) + emit(3, struct.pack('<i', floor))
             + emit(4, struct.pack('<i', rotation)) + emit(5, b''))
     return emit(1, body) + emit(0, b'') + emit(2, b'')
+
+
+def route_resource(waypoint_name_ids):
+    """Bytes of a Units/<id> resource: one patrol route as a list of waypoint name IDs."""
+    points = struct.pack('<%di' % len(waypoint_name_ids), *waypoint_name_ids)
+    route = emit(2, emit(1, struct.pack('<i', len(waypoint_name_ids))) + emit(2, points))
+    return emit(1, emit(2, emit(1, route))) + emit(0, b'') + emit(2, b'')
 
 
 def compile_mission(build, mission_dir):
@@ -203,11 +214,18 @@ def compile_mission(build, mission_dir):
                 groups.upsert(group_ids[unit['group']], UserName=unit['group'], Formation='')
             group = group_ids[unit['group']]
         x, y = unit['pos']
-        units.upsert(ids.new('Units'), VariantID=variant_id, MonsterID=unit['pers'],
+        unit_id = ids.new('Units')
+        units.upsert(unit_id, VariantID=variant_id, MonsterID=unit['pers'],
                      PosX=x, PosY=y, Floor=unit.get('floor', 0), Rotation=unit.get('rotation', 0.0),
                      Player=unit.get('player', 1), Diplomacy=-1, Group=group,
                      Name=unit.get('name', ''), Pose=pose, Logic=unit.get('logic', 'Sentry'),
                      RoamingRadius=unit.get('roaming_radius', 0))
+        if 'route' in unit:
+            missing = [name for name in unit['route'] if name not in name_ids]
+            if missing:
+                raise ValueError('%s: unit %r route uses unknown waypoints %s' % (
+                    mission_dir, unit.get('name'), ', '.join(missing)))
+            build.resources[('Units', unit_id)] = route_resource([name_ids[name] for name in unit['route']])
 
     # cameras: anchor is the point looked at (tiles, z up), angles in radians
     cameras = db['Cameras']
@@ -220,11 +238,34 @@ def compile_mission(build, mission_dir):
                        Pitch=cam.get('pitch', -0.7), Roll=0.0,
                        Distance=cam.get('distance', 20.0), FOV=cam.get('fov', 35.0))
 
+    # dialogues: text-only lines shown on the engine's letterbox dialogue screen
+    dialogue_codes = {}
+    for dialogue in spec.get('dialogue', []):
+        code = 'SS2_%s_%s' % (spec['name'], dialogue['name'])
+        dialogue_codes[dialogue['name']] = code
+        dialog_id = ids.new('Dialogs')
+        db['Dialogs'].upsert(dialog_id, Code=code, UserName=code)
+        for n, line in enumerate(dialogue['line'], 1):
+            text = line['text']
+            if line['who'] not in pers:
+                raise ValueError('%s: dialogue %r line %d: unknown RPGPers %d' % (
+                    mission_dir, dialogue['name'], n, line['who']))
+            if '\n' in text or not all(c in DIALOGUE_CHARS for c in text):
+                raise ValueError('%s: dialogue %r line %d: use <br> for line breaks and only '
+                                 'characters the retail fonts have' % (mission_dir, dialogue['name'], n))
+            label = '%s\\%s.%d' % (tag, dialogue['name'], n)
+            string_id = ids.new('Strings')
+            db['Strings'].upsert(string_id, UserName=label, String=text)
+            ack_id = ids.new('AckInfos')
+            db['AckInfos'].upsert(ack_id, UserName=label, WhoID=line['who'], StringID=string_id)
+            db['DialogSeqs'].upsert(ids.new('DialogSeqs'), DialogID=dialog_id, AckInfoID=ack_id)
+
     # script, with the IDs it needs prepended as globals (scripts fetch groups and cameras by ID)
     with open(os.path.join(mission_dir, spec.get('script', 'script.lua')), encoding='utf-8') as f:
         code = f.read().replace('\r\n', '\n')
     header = ''.join('SS2_GROUP_%s = %d\n' % item for item in sorted(group_ids.items()))
     header += ''.join('SS2_CAMERA_%s = %d\n' % item for item in sorted(camera_ids.items()))
+    header += ''.join('SS2_DIALOG_%s = "%s"\n' % item for item in sorted(dialogue_codes.items()))
     db['Scripts'].upsert(ids.single, UserName=tag, CodeText=header + code)
     return {'name': spec['name'], 'slot': slot, 'variant': variant_id}
 
