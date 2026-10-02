@@ -123,6 +123,18 @@ def compile_mission(build, mission_dir):
     for pack_name in VARIANT_PACKS:
         build.copy_resource(pack_name, shell, variant_id)
 
+    # relations between player slots at mission start. Each of the 16 slots holds two bits
+    # per other slot: 0 enemy, 1 neutral, 2 ally. Pairs not listed are enemies.
+    if 'diplomacy' in spec:
+        masks = [0] * 16
+        for state, key in ((1, 'neutral'), (2, 'ally')):
+            for a, b in spec['diplomacy'].get(key, []):
+                masks[a] |= state << (2 * b)
+                masks[b] |= state << (2 * a)
+        db['Diplomacies'].upsert(ids.single, UserName=tag,
+                                 **{'Diplomacy%d' % (i + 1): mask for i, mask in enumerate(masks)})
+        variants.upsert(variant_id, DiplomacyID=ids.single)
+
     # extra level pieces: nested templates (buildings, trees) and single objects
     templates, rects = db['Templates'], db['Rects']
     for piece in spec.get('template', []):
