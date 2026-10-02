@@ -29,8 +29,11 @@
 ## Testing
 
 - **Database library**: `python tools/test_ssdb.py <game.db>` must pass (byte-identical round trip)
-- **Missions**: every mission must start under `python tools/run.py map <id>` with no
-  script errors in the log
+- **Missions**: every mission has a `test.lua` scripted playthrough;
+  `python tools/test_missions.py` must pass (runs each one in the game)
+- **Scripts**: the build runs `tools/lualint.py` on every mission script and fails on
+  undefined or do-nothing names; `python tools/test_lualint.py` tests the checker
+- **Retail data**: `python tools/test_build.py` must pass (every retail row intact)
 - **Required Tests**: balance formulas and gameplay systems once SS2 adds its own
 
 ## Forbidden Patterns

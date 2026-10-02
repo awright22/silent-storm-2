@@ -1,24 +1,25 @@
 """Survey retail levels: which ones load on the ported engine, and what they look like.
 
-    python tools/survey.py [--limit N] [--retry]
+    python tools/survey.py [--limit N] [--retry] [--report]
 
 Every retail campaign zone and every level template marked "Complete" is
 compiled as an empty SS2 mission (level geometry only, overview camera) into
 its own run root, build/survey, then launched one at a time. For each level
 the result (loaded / timeout / crashed, load time) goes to
 build/survey/results.json and an overview screenshot to build/survey/shots/.
-The run is resumable: levels already in results.json are skipped unless
---retry is given.
+Each level's engine log is kept next to its screenshot. The run is resumable:
+levels already in results.json are skipped unless --retry is given, and
+--report writes docs/locations.md from the saved results without running
+anything.
 
-The survey uses its own exe name (SS2Survey.exe) and no debug-output
-listener, so it can run while tools/run.py is used for other tests.
+The survey uses its own run root and exe name (SS2Survey.exe), so it can run
+while tools/run.py is used for other tests.
 """
 import argparse
 import json
 import os
 import shutil
 import subprocess
-import time
 
 import build
 import config
@@ -28,7 +29,7 @@ from ssdb import Database
 
 EXE = 'SS2Survey.exe'
 LOAD_TIMEOUT = 600
-SETTLE = 8          # seconds between the mission UI appearing and the screenshot
+SETTLE = 8          # seconds between the mission starting and the screenshot
 
 
 def candidates(db):
@@ -85,53 +86,22 @@ def prepare(paths, survey_dir, levels):
     return {variant: mission['variant'] for (variant, _, _), mission in zip(levels, compiled)}
 
 
-def mission_ui_visible(hwnd):
-    """True once the mission interface is drawn: the bottom panel is no longer black."""
-    w, h, bgra = game_run.grab(hwnd)
-    if not w:
-        return False
-    total = count = 0
-    for y in range(int(h * 0.92), int(h * 0.98), 4):
-        row = bgra[y * w * 4:(y + 1) * w * 4]
-        for channel in (0, 1, 2):
-            samples = row[channel::16]
-            total += sum(samples)
-            count += len(samples)
-    return total / count > 12
-
-
-def exit_info(proc, seconds):
-    return {'status': 'crashed', 'exit_code': '0x%X' % (proc.returncode & 0xFFFFFFFF), 'seconds': seconds}
-
-
-def survey_one(survey_dir, map_id, png_path):
-    game = [os.path.join(survey_dir, EXE), '-1024'] + game_run.write_boot_cfg(survey_dir, 'map %d' % map_id)
-    proc = game_run.launch_quiet(game, survey_dir)
-    start = time.time()
-    in_back = False
-    try:
-        while time.time() - start < LOAD_TIMEOUT:
-            time.sleep(2)
-            if proc.poll() is not None:
-                return exit_info(proc, round(time.time() - start))
-            hwnd = game_run.find_window(EXE)
-            if not hwnd:
-                continue
-            if not in_back:
-                game_run.send_to_back(hwnd)
-                in_back = True
-            if mission_ui_visible(hwnd):
-                loaded = round(time.time() - start)
-                time.sleep(SETTLE)
-                if proc.poll() is not None:
-                    return exit_info(proc, loaded)
-                game_run.capture(hwnd, png_path)
-                return {'status': 'loaded', 'seconds': loaded}
+def survey_one(survey_dir, map_id, variant):
+    """Load one level and take its overview shot. Returns the result record."""
+    shots = os.path.join(survey_dir, 'shots')
+    result = game_run.run_game(survey_dir, EXE, 'map %d' % map_id, os.path.join(shots, '%d.log' % variant),
+                               shots=[SETTLE], shot_base=os.path.join(shots, str(variant)),
+                               load_timeout=LOAD_TIMEOUT)
+    png = os.path.join(shots, '%d_%02d.png' % (variant, SETTLE))
+    if os.path.exists(png):
+        os.replace(png, os.path.join(shots, '%d.png' % variant))
+    if result.crashed:
+        return {'status': 'crashed'}
+    if result.started is None:
+        if result.exit_code is not None:
+            return {'status': 'crashed', 'exit_code': '0x%X' % result.exit_code}
         return {'status': 'timeout'}
-    finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait(10)
+    return {'status': 'loaded', 'seconds': round(result.started)}
 
 
 def write_report(results, path):
@@ -186,7 +156,7 @@ def main():
         key = str(variant)
         if key in results and (results[key]['status'] == 'loaded' or not args.retry):
             continue
-        result = survey_one(survey_dir, map_ids[variant], os.path.join(shots, '%d.png' % variant))
+        result = survey_one(survey_dir, map_ids[variant], variant)
         result.update(name=template['UserName'], kind=label, width=template['Width'], height=template['Height'])
         results[key] = result
         with open(results_path, 'w', encoding='utf-8') as f:

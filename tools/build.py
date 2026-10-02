@@ -1,7 +1,11 @@
 """Build Silent Storm 2: stage the run root, then compile game/ into it.
 
-    python tools/build.py [--extra DIR ...]
+    python tools/build.py [--test] [--skip-dialogue] [--extra DIR ...]
 
+--test compiles each mission's test.lua into its script (a scripted
+playthrough; see tools/test_missions.py). Do not play a test build.
+--skip-dialogue makes dialogues log a line instead of opening, so an
+unattended run gets past them.
 --extra adds another content folder (laid out like game/) to this build only,
 for scratch missions that should not live in the repository.
 
@@ -31,7 +35,8 @@ def patched_retail_db(paths, db_path):
     return [os.path.basename(p) for p in patches]
 
 
-def build(extra=()):
+def build(extra=(), test=False, skip_dialogue=False):
+    """Build the run root. Returns the compiled missions' summaries."""
     paths = config.load()
     run = paths['run']
     copied = stage.stage(paths)
@@ -43,16 +48,29 @@ def build(extra=()):
 
     db = Database.load(db_path)
     b = content.Build(db, run)
+    b.test = test
+    b.skip_dialogue = skip_dialogue
+    missions = []
     for game_dir in (config.GAME,) + tuple(extra):
         for mission in content.compile_all(b, game_dir):
             print('mission: %(name)s -> map %(variant)d' % mission)
+            missions.append(mission)
     db.save(db_path)
     b.write_resources()
-    print('built %s (%d loose resources)' % (db_path, len(b.resources)))
+    note = '  [TEST BUILD]' if test else '  [dialogues skipped]' if skip_dialogue else ''
+    print('built %s (%d loose resources)%s' % (db_path, len(b.resources), note))
+    return missions
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument('--test', action='store_true', help='compile mission test scripts in')
+    parser.add_argument('--skip-dialogue', action='store_true',
+                        help='log dialogues instead of showing them, for unattended screenshots')
     parser.add_argument('--extra', action='append', default=[], metavar='DIR',
                         help='additional content folder for this build only')
-    build(parser.parse_args().extra)
+    args = parser.parse_args()
+    try:
+        build(args.extra, args.test, args.skip_dialogue)
+    except ValueError as problem:       # a mistake in the content sources, already described
+        sys.exit('build failed: %s' % problem)

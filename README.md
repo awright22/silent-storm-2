@@ -5,8 +5,10 @@ tactical RPG about a WWII special operations squad, built on the original
 engine and its destructible buildings.
 
 **Status: early development.** There is no playable campaign yet. What exists
-is the pipeline that turns text sources into missions the engine runs, and one
-test mission that proves it.
+is the pipeline that turns text sources into missions the engine runs, and a
+first mission built with it ("Cold Welcome": free a resistance contact held at
+a snowbound farm). A proposal for the first theater is in
+[design/gdd/vertical-slice-norway.md](design/gdd/vertical-slice-norway.md).
 
 ![SS2 test mission running in the engine](docs/screenshots/m00_sandbox_first_run.png)
 
@@ -43,7 +45,8 @@ writes to your install.
 ```
 copy ss2.local.example.toml ss2.local.toml     # then edit the two paths
 python tools/build.py
-python tools/run.py map 50001 --front
+python tools/run.py map 50010 118 116 42 120 --front    # mission 1 with the SS2 squad
+python tools/test_missions.py                           # scripted playthroughs
 ```
 
 Details, the mission file format and the script dialect are in

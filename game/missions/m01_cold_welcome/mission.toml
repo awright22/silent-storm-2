@@ -1,0 +1,174 @@
+# Mission 1, "Cold Welcome": free the resistance contact held at the farm and
+# get him back to the tree line. Design: design/gdd/vertical-slice-norway.md
+#
+# Run with the SS2 squad:  python tools/run.py map 50010 118 116 42 120 --front
+slot = 10
+name = "m01"
+shell = 5354            # retail "Farm Complete", 48x32 tiles, snow
+party = [118, 116, 42, 120]     # Elf, Doug, Arvid, Yves (used when the mission is launched on its own)
+light = "night"
+
+# Layout (tiles): farmhouse x 24..40, y 1..13; barn x 5..23, y 15..31;
+# walled well yard in the north-west; the team arrives among the trees in the
+# south-east corner, out of sight of the yard.
+
+[diplomacy]
+neutral = [[0, 3], [1, 3]]      # player 3 is the contact: nobody shoots him until he is freed
+
+[[character]]
+name = "olsen"
+base = 937              # CivilMale01Allies
+display_name = "Olsen"
+
+# --- the team's arrival point and the way out ---
+
+[[waypoint]]
+name = "UnitHero"
+pos = [41.0, 29.0]
+
+[[waypoint]]
+name = "Unit1"
+pos = [42.5, 30.0]
+
+[[waypoint]]
+name = "Unit2"
+pos = [39.5, 30.0]
+
+[[waypoint]]
+name = "Unit3"
+pos = [43.5, 28.5]
+
+[[waypoint]]
+name = "m01_extract"
+pos = [41.0, 29.0]
+
+[[waypoint]]
+name = "m01_olsen_spot"     # where Olsen is held, inside the farmhouse
+pos = [33.0, 7.0]
+
+# --- the sentry's beat: barn corner, across the yard, west end of the house ---
+
+[[waypoint]]
+name = "m01_beat_barn"
+pos = [24.5, 23.0]
+
+[[waypoint]]
+name = "m01_beat_yard"
+pos = [26.0, 15.0]
+
+[[waypoint]]
+name = "m01_beat_house"
+pos = [22.5, 9.0]
+
+# --- the patrol ---
+
+[[unit]]
+name = "m01_sentry"
+pers = 63               # Germ_soldierMP40
+pos = [25, 21]
+route = ["m01_beat_barn", "m01_beat_yard", "m01_beat_house", "m01_beat_yard"]
+group = "yard"
+
+[[unit]]
+name = "m01_well"
+pers = 288              # Germ_riflemanRifle33/40
+pos = [12, 13]
+rotation = 90.0
+group = "yard"
+
+[[unit]]
+name = "m01_yard1"
+pers = 63
+pos = [22, 12]
+rotation = 0.0
+group = "yard"
+
+[[unit]]
+name = "m01_yard2"
+pers = 288
+pos = [22, 16]
+rotation = 270.0
+group = "yard"
+
+[[unit]]
+name = "m01_officer"
+pers = 64               # Germ_officerWaltherP38
+pos = [31, 8]
+rotation = 0.0
+group = "house"
+
+[[unit]]
+name = "m01_guard"
+pers = 63
+pos = [35, 5]
+rotation = 180.0
+group = "house"
+
+[[unit]]
+name = "m01_olsen"
+pers = "olsen"
+pos = [33, 6]
+player = 3
+logic = "Fear"
+
+# --- cameras ---
+
+[[camera]]
+name = "arrival"
+anchor = [38.0, 24.0, 0.0]
+yaw = -0.8
+pitch = -0.8
+distance = 34.0
+
+[[camera]]
+name = "farm"
+anchor = [28.0, 14.0, 0.0]
+yaw = -0.8
+pitch = -0.8
+distance = 60.0
+
+# --- dialogue ---
+
+[[dialogue]]
+name = "intro"
+
+[[dialogue.line]]
+who = 118               # Elf
+text = "That's the farm. Smoke from the chimney, and those are not farmhands in the yard."
+
+[[dialogue.line]]
+who = 42                # Arvid
+text = "Germans. Olsen was to meet us here alone. They will be holding him in the house."
+
+[[dialogue.line]]
+who = 118
+text = "Then we get him out. One sentry walks between the barn and the house. Watch his beat before you move."
+
+[[dialogue]]
+name = "freed"
+
+[[dialogue.line]]
+who = "olsen"
+text = "You took your time. They sent for a truck an hour ago. We should not be here when it comes."
+
+[[dialogue.line]]
+who = 118
+text = "Stay close to us. Everyone back to the trees."
+
+[[dialogue]]
+name = "olsen_dead"
+
+[[dialogue.line]]
+who = 118
+text = "Olsen is dead. Without him we have no way to the others.<br>Pull out."
+
+[[dialogue]]
+name = "done"
+
+[[dialogue.line]]
+who = 42
+text = "Clear of the farm. Olsen says the cabin is two hours north."
+
+[[dialogue.line]]
+who = 118
+text = "Good work. Move, before that truck arrives."

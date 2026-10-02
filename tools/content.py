@@ -17,6 +17,7 @@ import os
 import struct
 import tomllib
 
+import lualint
 from ssdb import emit
 from sspack import Package
 
@@ -34,7 +35,16 @@ PLACEMENT_TABLES = {
 }
 VARIANT_PACKS = ('Terrain', 'Buildings')    # resources keyed by variant ID
 
+# tables giving a character its starting equipment, keyed by RPGPersID
+EQUIPMENT_TABLES = (
+    'RPGWeapon4Pers', 'RPGClip4Pers', 'RPGGrenade4Pers', 'RPGFirstAid4Pers', 'RPGMeleeWeapon4Pers',
+    'RPGMineDetector4Pers', 'RPGMines4Pers', 'RPGTool4Pers',
+)
+
 POSES = ('Stand', 'Crouch', 'Crawl')
+
+# named times of day -> the retail AmbientLights row used for them
+LIGHTS = {'day': 106, 'night': 108, 'dusk': 65}
 
 # What the retail fonts can draw: ASCII, Cyrillic and a few typographic marks.
 # Accented Latin letters are missing and render as a placeholder box.
@@ -50,6 +60,9 @@ class Build:
         self.run_dir = run_dir
         self._packs = {}
         self.resources = {}     # (pack name, file id) -> bytes
+        self.common_script = ''
+        self.test = False       # compile each mission's test.lua into its script
+        self.skip_dialogue = False      # dialogues are logged, not shown (unattended runs)
 
     def pack(self, name):
         if name not in self._packs:
@@ -134,6 +147,18 @@ def compile_mission(build, mission_dir):
     for pack_name in VARIANT_PACKS:
         build.copy_resource(pack_name, shell, variant_id)
 
+    # time of day: most retail levels use a light set that picks day or night at random.
+    # A mission that names one gets its own set holding only that light.
+    if 'light' in spec:
+        light = LIGHTS.get(spec['light'], spec['light'])
+        lights = db['AmbientLights']
+        if not isinstance(light, int) or light not in lights:
+            raise ValueError('%s: light must be one of %s or an AmbientLights ID' % (
+                mission_dir, ', '.join(sorted(LIGHTS))))
+        db['AmbientLightTemplates'].upsert(ids.single, UserName=tag)
+        lights.clone(light, ids.new('AmbientLights'), TemplateID=ids.single, RndWeight=1.0)
+        variants.upsert(variant_id, DefaultLight=ids.single)
+
     # relations between player slots at mission start. Each of the 16 slots holds two bits
     # per other slot: 0 enemy, 1 neutral, 2 ally. Pairs not listed are enemies.
     if 'diplomacy' in spec:
@@ -191,19 +216,46 @@ def compile_mission(build, mission_dir):
         build.resources[('Waypoints', new_id)] = waypoint_resource(
             x, y, wp.get('z', 0.0), wp.get('floor', 0), wp.get('rotation', 0))
 
+    # characters: a retail character cloned under a new name, with its starting equipment
+    pers = db['RPGPers']
+    character_ids = {}
+    for character in spec.get('character', []):
+        base = character['base']
+        if base not in pers:
+            raise ValueError('%s: character %r: unknown base RPGPers %d' % (mission_dir, character['name'], base))
+        new_id = ids.new('RPGPers')
+        character_ids[character['name']] = new_id
+        name_string = ids.new('Strings')
+        db['Strings'].upsert(name_string, UserName='%s\\%s' % (tag, character['name']),
+                             String=character['display_name'])
+        pers.clone(base, new_id, UserName='%s\\%s' % (tag, character['name']),
+                   DisplayName=name_string, LongNameID=name_string)
+        for table_name in EQUIPMENT_TABLES:
+            table = db[table_name]
+            for row in list(table.find(RPGPersID=base)):
+                table.clone(row['ID'], ids.new(table_name), RPGPersID=new_id)
+
+    def pers_id(value, what):
+        """An RPGPers ID given as a number, or as the name of one of this mission's characters."""
+        if isinstance(value, str):
+            if value not in character_ids:
+                raise ValueError('%s: %s: no [[character]] named %r' % (mission_dir, what, value))
+            return character_ids[value]
+        if value not in pers:
+            raise ValueError('%s: %s: unknown RPGPers %d' % (mission_dir, what, value))
+        return value
+
     # units
     groups = db['UnitGroups']
     group_ids = {}
     units = db['Units']
-    pers = db['RPGPers']
     if spec.get('keep_units', False):
         for row in list(units.find(VariantID=shell)):
             new_id = ids.new('Units')
             units.clone(row['ID'], new_id, VariantID=variant_id)
             build.copy_resource('Units', row['ID'], new_id)
     for unit in spec.get('unit', []):
-        if unit['pers'] not in pers:
-            raise ValueError('%s: unit %r uses unknown RPGPers %d' % (mission_dir, unit.get('name'), unit['pers']))
+        who = pers_id(unit['pers'], 'unit %r' % unit.get('name'))
         pose = unit.get('pose', 'Stand')
         if pose not in POSES:
             raise ValueError('%s: pose must be one of %s' % (mission_dir, ', '.join(POSES)))
@@ -215,9 +267,10 @@ def compile_mission(build, mission_dir):
             group = group_ids[unit['group']]
         x, y = unit['pos']
         unit_id = ids.new('Units')
-        units.upsert(unit_id, VariantID=variant_id, MonsterID=unit['pers'],
+        units.upsert(unit_id, VariantID=variant_id, MonsterID=who,
                      PosX=x, PosY=y, Floor=unit.get('floor', 0), Rotation=unit.get('rotation', 0.0),
                      Player=unit.get('player', 1), Diplomacy=-1, Group=group,
+                     RelativeLevel=unit.get('level', 0),
                      Name=unit.get('name', ''), Pose=pose, Logic=unit.get('logic', 'Sentry'),
                      RoamingRadius=unit.get('roaming_radius', 0))
         if 'route' in unit:
@@ -247,9 +300,7 @@ def compile_mission(build, mission_dir):
         db['Dialogs'].upsert(dialog_id, Code=code, UserName=code)
         for n, line in enumerate(dialogue['line'], 1):
             text = line['text']
-            if line['who'] not in pers:
-                raise ValueError('%s: dialogue %r line %d: unknown RPGPers %d' % (
-                    mission_dir, dialogue['name'], n, line['who']))
+            who = pers_id(line['who'], 'dialogue %r line %d' % (dialogue['name'], n))
             if '\n' in text or not all(c in DIALOGUE_CHARS for c in text):
                 raise ValueError('%s: dialogue %r line %d: use <br> for line breaks and only '
                                  'characters the retail fonts have' % (mission_dir, dialogue['name'], n))
@@ -257,21 +308,54 @@ def compile_mission(build, mission_dir):
             string_id = ids.new('Strings')
             db['Strings'].upsert(string_id, UserName=label, String=text)
             ack_id = ids.new('AckInfos')
-            db['AckInfos'].upsert(ack_id, UserName=label, WhoID=line['who'], StringID=string_id)
+            db['AckInfos'].upsert(ack_id, UserName=label, WhoID=who, StringID=string_id)
             db['DialogSeqs'].upsert(ids.new('DialogSeqs'), DialogID=dialog_id, AckInfoID=ack_id)
 
-    # script, with the IDs it needs prepended as globals (scripts fetch groups and cameras by ID)
-    with open(os.path.join(mission_dir, spec.get('script', 'script.lua')), encoding='utf-8') as f:
-        code = f.read().replace('\r\n', '\n')
+    # The script the engine gets: generated constants (scripts fetch groups and cameras by ID),
+    # the shared helpers, the mission script and, in a test build, the mission's test.lua, which
+    # plays the mission through by script and logs TEST PASS or TEST FAIL.
+    script_name = spec.get('script', 'script.lua')
+    test_path = os.path.join(mission_dir, 'test.lua')
+    has_test = build.test and os.path.exists(test_path)
     header = ''.join('SS2_GROUP_%s = %d\n' % item for item in sorted(group_ids.items()))
     header += ''.join('SS2_CAMERA_%s = %d\n' % item for item in sorted(camera_ids.items()))
     header += ''.join('SS2_DIALOG_%s = "%s"\n' % item for item in sorted(dialogue_codes.items()))
-    db['Scripts'].upsert(ids.single, UserName=tag, CodeText=header + code)
-    return {'name': spec['name'], 'slot': slot, 'variant': variant_id}
+    header += ''.join('SS2_PERS_%s = %d\n' % item for item in sorted(character_ids.items()))
+    header += 'SS2_TEST = %s\n' % ('1' if has_test else 'nil')
+    header += 'SS2_SKIP_DIALOGUE = %s\n' % ('1' if has_test or build.skip_dialogue else 'nil')
+    parts = [('generated constants', header), ('game/scripts/common.lua', build.common_script)]
+    for name in (script_name, 'test.lua') if has_test else (script_name,):
+        with open(os.path.join(mission_dir, name), encoding='utf-8') as f:
+            parts.append((name, f.read().replace('\r\n', '\n').rstrip('\n') + '\n'))
+    source = ''.join(text for _, text in parts)
+
+    problems = lualint.lint(source)
+    if problems:
+        lines = []
+        for line, message in problems:
+            first = 1
+            for name, text in parts:        # which file the combined line number falls in
+                count = text.count('\n')
+                if line < first + count:
+                    lines.append('  %s line %d: %s' % (name, line - first + 1, message))
+                    break
+                first += count
+        raise ValueError('%s: script problems\n%s' % (mission_dir, '\n'.join(lines)))
+
+    db['Scripts'].upsert(ids.single, UserName=tag, CodeText=source)
+    return {'name': spec['name'], 'slot': slot, 'variant': variant_id, 'has_test': has_test,
+            'party': spec.get('party', [])}
 
 
 def compile_all(build, game_dir):
-    """Compile every mission under game/missions, in slot order."""
+    """Compile every mission under game/missions, in folder-name order.
+
+    game/scripts/common.lua, if present, is put in front of every mission script.
+    """
+    common = os.path.join(game_dir, 'scripts', 'common.lua')
+    if os.path.exists(common):
+        with open(common, encoding='utf-8') as f:
+            build.common_script = f.read().replace('\r\n', '\n') + '\n'
     root = os.path.join(game_dir, 'missions')
     dirs = [os.path.join(root, d) for d in sorted(os.listdir(root))
             if os.path.exists(os.path.join(root, d, 'mission.toml'))]
