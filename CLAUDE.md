@@ -1,26 +1,39 @@
-# Claude Code Game Studios -- Game Studio Agent Architecture
+# Silent Storm 2
 
-Indie game development managed through 48 coordinated Claude Code subagents.
-Each agent owns a specific domain, enforcing separation of concerns and quality.
+Non-commercial fan sequel to Silent Storm (2003), built as a content layer on a
+modern port of the original engine. Developed with the Claude Code Game Studios
+agent architecture (48 coordinated subagents, each owning a domain).
 
 ## Technology Stack
 
-- **Engine**: [CHOOSE: Godot 4 / Unity / Unreal Engine 5]
-- **Language**: [CHOOSE: GDScript / C# / C++ / Blueprint]
+- **Engine**: the original Silent Storm engine (Nival, C++, DirectX 9), ported
+  to a modern compiler in a separate repository. This repository does not
+  contain or modify engine code.
+- **Content**: text sources under `game/` (TOML mission descriptions, Lua 4.0
+  scripts), compiled into the game database by Python tools under `tools/`.
+- **Language**: Python 3.11+ (standard library only) for tools; Lua 4.0 for
+  mission scripts.
 - **Version Control**: Git with trunk-based development
-- **Build System**: [SPECIFY after choosing engine]
-- **Asset Pipeline**: [SPECIFY after choosing engine]
+- **Build System**: `python tools/build.py` (stages retail data, compiles
+  content into `build/run`); `python tools/run.py` to launch and capture.
+- **Asset Pipeline**: retail assets are reused in place; SS2 adds database rows
+  and loose resource files only. See `docs/content-pipeline.md`.
 
-> **Note**: Engine-specialist agents exist for Godot, Unity, and Unreal with
-> dedicated sub-specialists. Use the set matching your engine.
+> **Do not suggest another engine.** The engine choice is settled
+> (`docs/architecture/adr-0001-content-layer-on-ported-engine.md`). The Godot,
+> Unity and Unreal specialist agents and `docs/engine-reference/` from the
+> template do not apply to this project.
+
+> **Retail data never enters the repository.** Everything under `build/` is
+> derived from the owner's game install and is gitignored.
 
 ## Project Structure
 
 @.claude/docs/directory-structure.md
 
-## Engine Version Reference
+## Content Pipeline Reference
 
-@docs/engine-reference/godot/VERSION.md
+@docs/content-pipeline.md
 
 ## Technical Preferences
 
@@ -42,8 +55,6 @@ Every task follows: **Question -> Options -> Decision -> Draft -> Approval**
 
 See `docs/COLLABORATIVE-DESIGN-PRINCIPLE.md` for full protocol and examples.
 
-> **First session?** If the project has no engine configured and no game concept,
-> run `/start` to begin the guided onboarding flow.
 
 ## Coding Standards
 

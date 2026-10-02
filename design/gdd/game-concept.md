@@ -1,7 +1,7 @@
 # Game Concept: Silent Storm 2
 
 *Created: 2026-03-29*
-*Status: Draft*
+*Status: Draft (technical sections revised 2026-10-02)*
 
 ---
 
@@ -268,90 +268,84 @@ understand why something went wrong.
 
 | Consideration | Assessment |
 | ---- | ---- |
-| **Engine** | Original Silent Storm C++ engine (modernized) — ported from VS .NET 2003 to VS 2022 + CMake. DirectX 9 renderer, ODE physics, Lua 4.0 scripting. |
-| **Key Technical Challenges** | Porting 2003-era C++ to modern MSVC (STLport removal, API updates); replacing FMOD with open-source audio; replacing LifeStudioHeadAPI facial animation; extending existing destruction/ballistics/AI systems for sequel features |
-| **Art Style** | Reuse all original Silent Storm 3D assets natively — the engine reads its own proprietary formats directly. New content created with the included MapEdit.exe and Maya export tools. |
-| **Art Pipeline Complexity** | Low-Medium — existing assets work as-is; new content uses the original pipeline tools |
-| **Audio Needs** | Moderate — 8,494 original WAV sounds directly available; FMOD replacement needed (stub in place, real audio library TBD); new music and voice acting for sequel content |
+| **Engine** | The original Silent Storm C++ engine (DirectX 9, Lua 4.0 scripting), ported to a modern compiler in a separate repository. SS2 runs on it as a content layer and does not fork it (ADR-0001). |
+| **Key Technical Challenges** | Authoring levels without the original map editor; adding sequel mechanics (deeper stealth, consequences) that need new engine script functions; the engine port's remaining gaps (audio, video, parts of the script API) |
+| **Art Style** | Reuse the original Silent Storm assets in place. New levels are composed from existing building templates, objects and units as database rows. New 3D models and textures are out of reach until the engine can load them from outside the retail packs. |
+| **Art Pipeline Complexity** | Low: text sources compiled by `tools/build.py` (see `docs/content-pipeline.md`) |
+| **Audio Needs** | Moderate: the original sounds are available once the engine port has a real audio backend; new music and voice acting for sequel content |
 | **Networking** | None (single-player) |
 | **Content Volume** | ~20-30 hand-crafted missions across 3-4 theaters, ~6 character classes, ~50+ weapons, 10-20 squad-recruitable characters |
-| **Procedural Systems** | None — all hand-crafted (anti-pillar) |
+| **Procedural Systems** | None: all hand-crafted (anti-pillar) |
 
-### Engine Modernization (Critical Path)
+### Where the engine stands
 
-Building on the original Silent Storm source code (released Feb 2026 by Nival
-under non-commercial license). The codebase is 1,359 C++ source files across
-30 VS projects, organized as a DLL plugin architecture:
+The engine port builds with a modern MSVC toolchain and plays the retail game
+from an owned install: main menu, campaign entry and tactical missions. Audio,
+video and facial animation are still stubbed, and about half of the retail
+script API is missing or a placeholder. That work is tracked in the port's own
+repository, not here.
 
-- **Game.exe** → loads **Main.dll** (269 cpp — the engine core: AI, graphics,
-  physics, combat, buildings, rendering)
-- Engine DLLs: DBFormat, Script (Lua 4.0), FModSound, FileIO, Input, etc.
-- All original assets (29,000+ files) load natively — no conversion needed
-
-Modernization tasks:
-1. ~~CMake build system~~ (done — replaces VS .NET 2003 .sln)
-2. ~~FMOD stub~~ (done — compiles without commercial audio lib)
-3. ~~LifeStudioHeadAPI stub~~ (done — compiles without commercial facial anim lib)
-4. STLport → modern MSVC STL (compatibility shims in place)
-5. Fix modern MSVC compile errors (C++17 strictness)
-6. Get Game.exe linking and launching on Windows 11
+SS2's side is working end to end: a mission written as text compiles into the
+game database and runs in the engine with its own units, waypoints, cameras and
+script (`game/missions/m00_sandbox`).
 
 ---
 
 ## Risks and Open Questions
 
 ### Design Risks
-- Core destruction loop may not translate well to Godot 4.6's physics — need
-  early prototype to validate
-- Stealth system complexity could overwhelm a solo/tiny team — may need to
-  start with simpler stealth and expand
-- Multiple theaters multiplies content requirements — may need to reduce to
-  2 theaters for MVP
+- Stealth system complexity could overwhelm a solo/tiny team. Start with the
+  stealth the original engine already has and expand from there.
+- Multiple theaters multiply content requirements. May need to reduce to
+  2 theaters for the first release.
 
 ### Technical Risks
-- **Asset format conversion** is the critical unknown — the proprietary formats
-  may be harder to reverse-engineer than the header files suggest
-- Structural destruction simulation at acceptable frame rates in Godot
-- AI pathfinding on dynamically-changing terrain (floors collapsing, walls
-  breached) is a hard problem the original solved in C++ with custom systems
-- Godot 4.6 may not have equivalent physics capabilities to the original's
-  OpenDynamix/ODE integration
+- **Sequel mechanics need engine work.** Multi-state detection, disguises and
+  distractions go beyond what scripts can do today. Each needs new engine
+  functions, which depend on the engine port.
+- **No new geometry yet.** Levels can only rearrange what the original shipped.
+  Theaters the original never visited (for example North Africa or the Pacific)
+  need new art and an engine change to load it.
+- **Script API gaps.** Objectives, zone transitions and hints are placeholders
+  in the port today, so mission flow (briefing, objectives, win and lose) has
+  to be built on what is really implemented.
+- **Load times.** Large levels take one to three minutes to load, which slows
+  mission iteration.
 
 ### Market Risks
 - Non-commercial release limits distribution options but also removes
-  commercial pressure — the game ships when it's ready
-- Nival could revoke the license at any time (per license terms)
+  commercial pressure: the game ships when it's ready.
+- Nival could revoke the license at any time (per license terms).
+- Players must own the original game.
 
 ### Scope Risks
-- Asset conversion pipeline could consume months before gameplay work begins
-- Solo/tiny team building 20-30 missions across 4 theaters is ambitious
+- Solo/tiny team building 20-30 missions across 4 theaters is ambitious.
 - The "player's choice" sci-fi system essentially requires designing two
-  parallel narrative arcs
+  parallel narrative arcs.
 
 ### Open Questions
-- Can the original asset formats be converted reliably? Need prototype
-  converter for one asset type (geometries) to validate.
-- Does Godot 4.6's physics support the structural destruction model we need?
-  Need vertical slice prototype.
-- How much of the original AI system can be faithfully reimplemented? The
-  source has 55 AI files — study needed to prioritize.
-- Can the original `Game.exe` and `MapEdit.exe` run on modern Windows (even
-  via compatibility mode)? This would help understand the assets visually.
+- Which theaters can be built from the original's level art alone (England,
+  Germany, Switzerland, Russia) and which need new art?
+- How far can stealth go with script-only changes before engine work is needed?
+- How does the campaign layer (theater selection, squad management between
+  missions) map onto the original's scenario, chapter-map and base systems?
 
 ---
 
 ## MVP Definition
 
 **Core hypothesis**: The destruction + stealth tactical loop is fun and
-differentiated in a modern engine, using converted Silent Storm assets.
+differentiated as a new, hand-crafted mission on the original engine, using
+the original assets.
 
 **Required for MVP**:
 1. One fully destructible building with structural integrity simulation
-2. Ballistic system with penetration through materials
+   (provided by the engine)
+2. Ballistic system with penetration through materials (provided by the engine)
 3. Basic stealth (detection states, silent movement, line of sight)
 4. Squad of 3-4 characters with action points and basic abilities
 5. One complete playable mission (briefing → deployment → execution → extraction)
-6. At least one building type and terrain set converted from original assets
+6. At least one building type and terrain set, composed from original assets
 
 **Explicitly NOT in MVP** (defer to later):
 - Multiple theaters (one theater is enough to validate)
@@ -374,11 +368,12 @@ differentiated in a modern engine, using converted Silent Storm assets.
 
 ## Next Steps
 
+- [x] Choose the engine: original Silent Storm engine (ADR-0001)
+- [x] Content pipeline: text sources compile into a running mission
 - [ ] Get concept approval from creative-director
-- [ ] Configure Godot 4.6 engine setup (`/setup-engine godot 4.6`)
-- [ ] Validate concept completeness (`/design-review design/gdd/game-concept.md`)
-- [ ] Prototype asset converter — pick one asset type (geometries) and attempt conversion
-- [ ] Prototype structural destruction in Godot 4.6 to validate technical feasibility
+- [ ] Survey the original levels for usable mission locations (`tools/survey.py`)
+- [ ] Build the MVP mission: briefing, objectives, extraction, win and lose
+- [ ] Decide the first theater and its story
 - [ ] Decompose concept into systems (`/map-systems`)
 - [ ] Author per-system GDDs (`/design-system`)
 - [ ] Plan first sprint (`/sprint-plan new`)

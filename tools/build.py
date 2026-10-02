@@ -18,6 +18,15 @@ import stage
 from ssdb import Database
 
 
+def patched_retail_db(paths, db_path):
+    """Write a fresh copy of the retail database with the engine port's patches applied."""
+    shutil.copyfile(os.path.join(paths['run'], 'game.db.retail'), db_path)
+    patches = sorted(glob.glob(os.path.join(paths['engine'], 'tools', 'dbpatch_*.py')))
+    for patch in patches:
+        subprocess.run([sys.executable, patch, db_path], check=True, capture_output=True)
+    return [os.path.basename(p) for p in patches]
+
+
 def build():
     paths = config.load()
     run = paths['run']
@@ -25,10 +34,8 @@ def build():
     print('stage: %d files copied' % copied)
 
     db_path = os.path.join(run, 'game.db')
-    shutil.copyfile(os.path.join(run, 'game.db.retail'), db_path)
-    for patch in sorted(glob.glob(os.path.join(paths['engine'], 'tools', 'dbpatch_*.py'))):
-        subprocess.run([sys.executable, patch, db_path], check=True, capture_output=True)
-        print('engine patch: %s' % os.path.basename(patch))
+    for name in patched_retail_db(paths, db_path):
+        print('engine patch: %s' % name)
 
     db = Database.load(db_path)
     b = content.Build(db, run)
