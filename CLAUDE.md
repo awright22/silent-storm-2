@@ -27,6 +27,18 @@ agent architecture (48 coordinated subagents, each owning a domain).
 > **Retail data never enters the repository.** Everything under `build/` is
 > derived from the owner's game install and is gitignored.
 
+## Pace and Quality (owner's instruction, 2026-10-02)
+
+There is no rush on this project, on the standing goal of building Silent
+Storm 2 or on any part of the game. Take the time to do things right.
+
+- No shortcuts. Prefer the correct, complete solution over the quick one, even
+  when it takes much longer.
+- Cost and time are not concerns. Do not trim scope, skip verification or
+  leave a known gap in order to finish sooner or spend less.
+- Verify work in the running game before calling it done, and say plainly what
+  was and was not verified.
+
 ## Project Structure
 
 @.claude/docs/directory-structure.md
