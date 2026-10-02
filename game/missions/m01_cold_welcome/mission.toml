@@ -9,8 +9,8 @@ party = [118, 116, 42, 120]     # Elf, Doug, Arvid, Yves (used when the mission 
 light = "night"
 
 # Layout (tiles): farmhouse x 24..40, y 1..13; barn x 5..23, y 15..31;
-# walled well yard in the north-west; the team arrives among the trees in the
-# south-east corner, out of sight of the yard.
+# walled well yard in the north-west. The team arrives on the west edge behind
+# the barn, which tools/vismap.py shows no German can see (build/vis/).
 
 [diplomacy]
 neutral = [[0, 3], [1, 3]]      # player 3 is the contact: nobody shoots him until he is freed
@@ -24,23 +24,23 @@ display_name = "Olsen"
 
 [[waypoint]]
 name = "UnitHero"
-pos = [41.0, 29.0]
+pos = [3.0, 24.0]
 
 [[waypoint]]
 name = "Unit1"
-pos = [42.5, 30.0]
+pos = [2.0, 26.0]
 
 [[waypoint]]
 name = "Unit2"
-pos = [39.5, 30.0]
+pos = [4.0, 26.5]
 
 [[waypoint]]
 name = "Unit3"
-pos = [43.5, 28.5]
+pos = [2.5, 22.0]
 
 [[waypoint]]
 name = "m01_extract"
-pos = [41.0, 29.0]
+pos = [3.0, 24.0]
 
 [[waypoint]]
 name = "m01_olsen_spot"     # where Olsen is held, inside the farmhouse
@@ -115,7 +115,7 @@ logic = "Fear"
 
 [[camera]]
 name = "arrival"
-anchor = [38.0, 24.0, 0.0]
+anchor = [8.0, 24.0, 0.0]
 yaw = -0.8
 pitch = -0.8
 distance = 34.0
