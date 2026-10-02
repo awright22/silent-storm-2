@@ -1,4 +1,4 @@
-"""game.db table IDs -> names (the 130 tables the Jan03 engine registers).
+"""game.db table IDs -> names (the 130 tables the Jan03 engine registers, plus two).
 
 Generated from the REGISTER_DATABASE_CLASS lines in the engine source; retail
 data also carries ~25 later tables that have no engine class (see docs).
@@ -136,5 +136,11 @@ TABLE_NAMES = {
     0xE0000023: "RPGKeys",
     0xE0000024: "RPGKey4Pers",
 }
+
+# Retail-era tables with no class in the January 2003 source, named from their columns.
+TABLE_NAMES.update({
+    0x0000006E: "ScenarioTasks",
+    0x0000006F: "ScenarioGoals",
+})
 
 TABLE_IDS = {name: tid for tid, name in TABLE_NAMES.items()}

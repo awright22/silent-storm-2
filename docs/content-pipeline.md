@@ -105,8 +105,8 @@ Things that differ from modern Lua:
   `TRUE`/`FALSE` constants.
 - No `local function`, no `#`, no `pairs` as you know it; `for i = a, b do` and
   `while` work.
-- `Sleep( n )`: n is in engine ticks, roughly 70 ms each, so `Sleep( 20 )` is
-  about 1.4 seconds.
+- `Sleep( n )`: n is in world ticks of 50 ms of game time, so `Sleep( 20 )` is
+  one second. `Sleep( 0 )` does not yield, and a loop with no `Sleep` freezes the game.
 - A call to a function the engine does not have used to abort the whole script;
   the port turns unknown names into logged no-ops instead. Check the log for
   `[luacompat]` lines when something silently does nothing.
