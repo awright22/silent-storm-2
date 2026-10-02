@@ -6,7 +6,7 @@ compiled as an empty SS2 mission (geometry only) and launched on the ported engi
 the mission interface on the survey machine. Overview screenshots are in
 `build/survey/shots/<shell>.png` after a survey run.
 
-42 of 43 surveyed levels load.
+43 of 45 surveyed levels load.
 
 | Shell | Name | Size (tiles) | Source | Result | Load (s) |
 |---|---|---|---|---|---|
@@ -53,3 +53,5 @@ the mission interface on the survey machine. Overview screenshots are in
 | 6213 | GFirst | 56x48 | zone GFirst | loaded | 197 |
 | 6701 | Village (Complete) | 48x56 | level | loaded | 191 |
 | 6760 | Parking/Repair place( Complete ) | 56x48 | level | loaded | 134 |
+| 6767 | RR (Complete) | 56x48 | level | timeout |  |
+| 8006 | AVillage (Complete) | 48x56 | level | loaded | 285 |

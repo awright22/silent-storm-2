@@ -135,7 +135,7 @@ class Run:
 
 
 def run_game(run_dir, exe_name, command, log_path, shots=(), shot_base=None, until=(), until_timeout=60,
-             width='1024', front=False, keep_open=False, linger=0, load_timeout=LOAD_TIMEOUT):
+             width='1024', front=False, keep_open=False, linger=0, load_timeout=LOAD_TIMEOUT, before=()):
     """Launch the game on a console command and watch it.
 
     shots: seconds after mission start at which to save <shot_base>_NN.png.
@@ -144,9 +144,10 @@ def run_game(run_dir, exe_name, command, log_path, shots=(), shot_base=None, unt
     after the match are not taken.
     linger: with neither shots nor until, seconds to let the mission run.
     keep_open: leave the game running until the player closes it.
+    before: console commands to run ahead of the main one (e.g. camera limits).
     """
     with open(os.path.join(run_dir, 'cfg', 'ss2_run.cfg'), 'w', newline='\r\n') as f:
-        f.write(command + '\n')
+        f.write(''.join(line + '\n' for line in tuple(before) + (command,)))
     if os.path.exists(log_path):
         os.remove(log_path)
 
@@ -233,6 +234,8 @@ def main():
     parser.add_argument('--claim', action='append', default=[],
                         help='what a screenshot is supposed to show, for its reviewer: once for all shots, '
                              'or once per shot in time order. Required with --shots.')
+    parser.add_argument('--before', action='append', default=[], metavar='COMMAND',
+                        help='console command to run ahead of the main one (repeatable)')
     parser.add_argument('--seconds', type=int, default=10,
                         help='without --shots: how long to let the mission run before closing it (default 10)')
     args = parser.parse_args()
@@ -250,7 +253,7 @@ def main():
 
     result = run_game(paths['run'], 'SS2.exe', ' '.join(args.command), log_path, shots=shots,
                       shot_base=os.path.join(shots_dir, args.out), width=args.width, front=args.front,
-                      keep_open=args.front and not shots, linger=args.seconds)
+                      keep_open=args.front and not shots, linger=args.seconds, before=args.before)
     for n, png in enumerate(result.shots):
         reviews.write_claim(png, args.claim[n if len(args.claim) > 1 else 0])
     if result.started is None:
