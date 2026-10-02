@@ -1,0 +1,46 @@
+# Pipeline test: build a new place out of retail pieces. An empty forest
+# clearing with a farmhouse, a sentry box and a guard added by SS2.
+# Not part of the campaign.
+slot = 2
+name = "m00_compose"
+shell = 4779            # retail "CompleteForest", 32x32 tiles, no buildings
+
+[[template]]
+id = 3226               # "House", 12x16, the farmhouse from "Farm Complete"
+pos = [16.0, 14.0]
+rotation = 90.0
+dz = 0.3125
+
+[[template]]
+id = 177                # "sentrybox", 8x8
+pos = [8.0, 26.0]
+
+[[object]]
+id = 574                # "Well"
+pos = [24.0, 24.0]
+
+[[waypoint]]
+name = "UnitHero"
+pos = [26.0, 28.0]
+
+[[waypoint]]
+name = "Unit1"
+pos = [27.5, 28.0]
+
+[[waypoint]]
+name = "Unit2"
+pos = [26.0, 29.5]
+
+[[unit]]
+name = "guard"
+pers = 63               # Germ_soldierMP40
+pos = [9, 23]
+rotation = 0.0
+player = 2
+
+[[camera]]
+name = "overview"
+anchor = [16.0, 16.0, 0.0]
+yaw = -0.8
+pitch = -1.2
+distance = 55.0

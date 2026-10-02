@@ -123,6 +123,28 @@ def compile_mission(build, mission_dir):
     for pack_name in VARIANT_PACKS:
         build.copy_resource(pack_name, shell, variant_id)
 
+    # extra level pieces: nested templates (buildings, trees) and single objects
+    templates, rects = db['Templates'], db['Rects']
+    for piece in spec.get('template', []):
+        nested = templates.get(piece['id'])
+        if nested is None:
+            raise ValueError('%s: [[template]] id %d does not exist' % (mission_dir, piece['id']))
+        x, y = piece['pos']
+        rects.upsert(ids.new('Rects'), VariantID=variant_id, TemplateLink=piece['id'],
+                     CenterX=x, CenterY=y, Width=nested['Width'], Height=nested['Height'],
+                     Floor=piece.get('floor', 0), Rotation=piece.get('rotation', 0.0),
+                     DeltaZ=piece.get('dz', 0.0), Params='')
+    placable, elements = db['PlacableObjects'], db['FinalElements']
+    for obj in spec.get('object', []):
+        if obj['id'] not in placable:
+            raise ValueError('%s: [[object]] id %d does not exist' % (mission_dir, obj['id']))
+        x, y = obj['pos']
+        elements.upsert(ids.new('FinalElements'), VariantID=variant_id, ModelID=obj['id'],
+                        PosX=x, PosY=y, Floor=obj.get('floor', 0), Rotation=obj.get('rotation', 0.0),
+                        DeltaZ=obj.get('dz', 0.0), ScaleX=1.0, ScaleY=1.0, ScaleZ=1.0,
+                        Lightmap=1, LightShadow=1, APRadius=10, LightParam='Night',
+                        Name=obj.get('name', ''))
+
     # waypoints: optionally the shell's own, then the mission's
     names = db['WaypointNames']
     name_ids = {}
