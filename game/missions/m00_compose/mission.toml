@@ -1,48 +1,64 @@
-# Pipeline test: build a new place out of retail pieces. An empty forest
-# clearing with a farmhouse, a sentry box and a guard added by SS2.
-# Not part of the campaign.
+# Pipeline test: build a new place out of retail pieces. A forest level with a
+# clearing cut into it, and in the clearing a farmhouse, a sentry box, a well
+# and a guard walking between the last two. Not part of the campaign.
+#
+#   python tools/run.py map 50002 118 116 117 120 --front
 slot = 2
 name = "m00_compose"
-shell = 4779            # retail "CompleteForest", 32x32 tiles, no buildings
+shell = 4779            # retail "CompleteForest", 32x32 tiles: sixteen 8x8 forest patches
+party = [118, 116, 117, 120]    # Elf, Doug, Rowdy, Yves
+light = "day"
+
+# The shell is solid forest. Take out the patches where the mission builds, or
+# trees grow through the house: everything centred in x 8..24, y 8..32.
+[[clear]]
+area = [8.0, 8.0, 24.0, 32.0]
 
 [[template]]
 id = 3226               # "House", 12x16, the farmhouse from "Farm Complete"
-pos = [16.0, 14.0]
+pos = [16.0, 14.0]      # rotated: covers x 8..24, y 8..20
 rotation = 90.0
 dz = 0.3125
 
 [[template]]
-id = 177                # "sentrybox", 8x8
-pos = [8.0, 26.0]
+id = 1505               # "Sentry-Box", 6x6
+pos = [12.0, 28.0]
 
 [[object]]
 id = 574                # "Well"
-pos = [24.0, 24.0]
+pos = [20.0, 25.0]
+name = "ss2_well"
 
+# the team, in the north-east of the clearing (+y is north)
 [[waypoint]]
 name = "UnitHero"
-pos = [26.0, 28.0]
+pos = [21.0, 29.0]
 
 [[waypoint]]
 name = "Unit1"
-pos = [27.5, 28.0]
+pos = [22.5, 30.0]
 
 [[waypoint]]
 name = "Unit2"
-pos = [26.0, 29.5]
+pos = [22.5, 28.0]
 
 [[waypoint]]
+name = "Unit3"
+pos = [20.0, 30.5]
+
+# the guard's beat, across the clearing north of the house
+[[waypoint]]
 name = "ss2_patrol_a"
-pos = [9.0, 22.0]
+pos = [10.0, 23.0]
 
 [[waypoint]]
 name = "ss2_patrol_b"
-pos = [22.0, 27.0]
+pos = [22.0, 22.0]
 
 [[unit]]
 name = "guard"
 pers = 63               # Germ_soldierMP40
-pos = [9, 23]
+pos = [10, 23]
 rotation = 0.0
 player = 1
 route = ["ss2_patrol_a", "ss2_patrol_b"]
@@ -55,15 +71,25 @@ name = "intro"
 
 [[dialogue.line]]
 who = 118               # Elf
-text = "One sentry, walking the fence line. The house is dark."
+text = "One sentry, walking between<br>the sentry box and the well."
 
 [[dialogue.line]]
 who = 116               # Doug
 text = "Then we wait for him to turn.<br>Nobody fires until I say."
 
+# yaw 0 looks north (+x to the right of the screen, +y up it); yaw 3.1416 looks
+# south. The ground here is high, so a camera looking north cannot aim closer
+# than about ten tiles to the north edge; the team is watched from the north.
 [[camera]]
-name = "overview"
-anchor = [16.0, 16.0, 0.0]
-yaw = -0.8
+name = "clearing"
+anchor = [16.0, 20.0]
+yaw = 0.0
 pitch = -1.2
-distance = 55.0
+distance = 74.0
+
+[[camera]]
+name = "team"
+anchor = [19.0, 27.0]
+yaw = 3.1416
+pitch = -0.9
+distance = 36.0

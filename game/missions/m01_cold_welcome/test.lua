@@ -24,6 +24,23 @@ function M01_Test()
 	local i, t
 	GroupCheat( party, CHEAT_GODMODE, 1 )
 
+	-- Who is on the map: the four-person team, the six Germans the mission
+	-- places, and Olsen. A retail level can bring soldiers of its own through
+	-- its nested templates; this mission's shell must not.
+	local p
+	for p = 0, 15 do
+		local expected = 0
+		if p == 0 then expected = 4 end
+		if p == 1 then expected = 6 end
+		if p == 3 then expected = 1 end
+		local found = GroupGetSize( PlayerGetUnits( p ) )
+		if found ~= expected then
+			M01_TestFail( "player slot "..p.." has "..found.." units, expected "..expected )
+			return
+		end
+	end
+	SS2_Log( "TEST step: unit count per player slot is as the mission file says" )
+
 	-- The stealth route only exists if the team arrives unseen. Watch for ten
 	-- seconds while the sentry walks his beat: nobody may see the team where it
 	-- stands, and no fight may start.

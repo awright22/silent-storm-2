@@ -26,6 +26,9 @@ import stage
 from ssdb import Database
 
 
+FAILED_MARKER = 'BUILD_FAILED'     # present in the run root while a build is unfinished or failed
+
+
 def patched_retail_db(paths, db_path):
     """Write a fresh copy of the retail database with the engine port's patches applied."""
     shutil.copyfile(os.path.join(paths['run'], 'game.db.retail'), db_path)
@@ -42,11 +45,17 @@ def build(extra=(), test=False, skip_dialogue=False):
     copied = stage.stage(paths)
     print('stage: %d files copied' % copied)
 
+    # Build into a work file and swap it in only when everything compiled. Until then the
+    # FAILED marker stands, so nothing runs the game on a half-built or stale database.
     db_path = os.path.join(run, 'game.db')
-    for name in patched_retail_db(paths, db_path):
+    work_path = db_path + '.work'
+    failed = os.path.join(run, FAILED_MARKER)
+    with open(failed, 'w') as f:
+        f.write('the last build did not finish\n')
+    for name in patched_retail_db(paths, work_path):
         print('engine patch: %s' % name)
 
-    db = Database.load(db_path)
+    db = Database.load(work_path)
     b = content.Build(db, run)
     b.test = test
     b.skip_dialogue = skip_dialogue
@@ -55,8 +64,12 @@ def build(extra=(), test=False, skip_dialogue=False):
         for mission in content.compile_all(b, game_dir):
             print('mission: %(name)s -> map %(variant)d' % mission)
             missions.append(mission)
-    db.save(db_path)
+    for warning in b.warnings:
+        print('warning: %s' % warning)
+    db.save(work_path)
+    os.replace(work_path, db_path)
     b.write_resources()
+    os.remove(failed)
     note = '  [TEST BUILD]' if test else '  [dialogues skipped]' if skip_dialogue else ''
     print('built %s (%d loose resources)%s' % (db_path, len(b.resources), note))
     return missions

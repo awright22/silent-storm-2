@@ -8,7 +8,7 @@ text, campaign flow).
 ## One-time setup
 
 1. Own Silent Storm (Steam or GOG) and have a build of the ported engine
-   (`<engine>/build/Game.exe`, engine commit 981e51f45 of 2026-10-02 or later:
+   (`<engine>/build/Game.exe`, engine commit 5b8f7fb0a of 2026-10-02 or later:
    the tools use its test hooks).
 2. Copy `ss2.local.example.toml` to `ss2.local.toml` and set both paths.
 3. `python tools/build.py`. The first run copies about 2.4 GB of retail data

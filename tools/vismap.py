@@ -14,8 +14,9 @@ character map of the level, written to build/vis/<mission>[_<stand>].txt:
     1-9 that many hostile units see him
     #   he cannot stand here (wall, object, off the level)
 
-Rows are y, columns are x, both in tiles from the level's corner; the map is
-printed with y growing downward. The probe stands upright and unhidden, and the
+Rows are y, columns are x, both in tiles from the level's corner. The map is
+printed with y growing upward, so it reads like the level seen from a camera
+at yaw 0 (+x to the right, +y up). The probe stands upright and unhidden, and the
 light is the mission's own, so this is the worst case for the player.
 
 --stand puts a unit on one of the mission's waypoints before scanning (for a
@@ -150,7 +151,7 @@ def main():
     lines = ['%s: where %d hostile units see a standing team member' % (args.mission, len(hostile))]
     lines += ['stand: %s on %s' % stand for stand in stands]
     lines.append('     x ' + ''.join('%-2d' % (x % 100) if n % 2 == 0 else '  ' for n, x in enumerate(xs)))
-    for y in ys:
+    for y in reversed(ys):
         cells = ''.join(('.' if c == '0' else c) + ' ' for c in rows.get(y, ['?'] * len(xs)))
         lines.append('y %3d  %s' % (y, cells))
     with open(out_path, 'w', encoding='utf-8', newline='\n') as f:

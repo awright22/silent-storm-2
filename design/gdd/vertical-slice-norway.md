@@ -63,8 +63,8 @@ The saw mill (5316) is a spare.
 farm. A German patrol arrived first. The contact is being held in the
 farmhouse while the patrol waits for a truck.
 
-**Layout.** Farmhouse with a smoking chimney in the north-east, barn in the
-south-west, a walled well yard in the north-west, open snow between them,
+**Layout.** Farmhouse with a smoking chimney in the south-east, barn in the
+north-west, a walled yard with a well in the south-west, open snow between them,
 conifers along the edges. The team arrives on the west edge behind the barn,
 which no guard can see (measured in the engine with `tools/vismap.py`).
 

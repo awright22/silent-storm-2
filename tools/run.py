@@ -17,8 +17,9 @@ to show. It is saved next to the image for the adversarial reviewer
 (docs/screenshot-review.md, tools/reviews.py).
 
 This uses the engine port's test hooks (SS_DEBUG_LOG, SS_RUN_CMD with the
-"screenshot" console command, SS_ALWAYS_ACTIVE), so nothing depends on the
-window: it opens without taking focus and is sent behind other windows.
+"screenshot" console command, SS_ALWAYS_ACTIVE, SS_NO_INPUT, SS_HIDE_CURSOR),
+so nothing depends on the window: it opens without taking focus, is sent
+behind other windows, ignores the real mouse and keyboard and draws no cursor.
 --front leaves it where it opens, for playing by hand; then the game is not
 closed automatically unless shots were asked for.
 """
@@ -135,7 +136,8 @@ class Run:
 
 
 def run_game(run_dir, exe_name, command, log_path, shots=(), shot_base=None, until=(), until_timeout=60,
-             width='1024', front=False, keep_open=False, linger=0, load_timeout=LOAD_TIMEOUT, before=()):
+             width='1024', front=False, keep_open=False, linger=0, load_timeout=LOAD_TIMEOUT, before=(),
+             timed=()):
     """Launch the game on a console command and watch it.
 
     shots: seconds after mission start at which to save <shot_base>_NN.png.
@@ -145,7 +147,11 @@ def run_game(run_dir, exe_name, command, log_path, shots=(), shot_base=None, unt
     linger: with neither shots nor until, seconds to let the mission run.
     keep_open: leave the game running until the player closes it.
     before: console commands to run ahead of the main one (e.g. camera limits).
+    timed: (seconds after mission start, console command) pairs. A command
+    starting with "@" is run as Lua in the mission.
     """
+    if os.path.exists(os.path.join(run_dir, 'BUILD_FAILED')):
+        sys.exit('the last build of %s failed or is unfinished; fix it and rebuild before running' % run_dir)
     with open(os.path.join(run_dir, 'cfg', 'ss2_run.cfg'), 'w', newline='\r\n') as f:
         f.write(''.join(line + '\n' for line in tuple(before) + (command,)))
     if os.path.exists(log_path):
@@ -160,7 +166,22 @@ def run_game(run_dir, exe_name, command, log_path, shots=(), shot_base=None, unt
         shot_files.append(bmp)
         # the console splits on spaces and SS_RUN_CMD on ';', so hand over a short relative path
         scheduled.append('@%s+%d|screenshot %s' % (STARTED, at, os.path.relpath(bmp, run_dir)))
+    for n, (at, timed_command) in enumerate(timed):
+        if timed_command.startswith('@'):
+            # Lua: the hook runs console commands, and the console command for Lua is
+            # script_run <file>, which looks for the file under scripts\
+            lua_file = 'ss2_timed_%d.l' % n
+            with open(os.path.join(run_dir, 'scripts', lua_file), 'w', newline='\r\n') as f:
+                f.write(timed_command[1:] + '\n')
+            timed_command = 'script_run ' + lua_file
+        if ';' in timed_command or '|' in timed_command:
+            sys.exit('a timed console command cannot contain ";" or "|": %s' % timed_command)
+        scheduled.append('@%s+%d|%s' % (STARTED, at, timed_command))
     env = dict(os.environ, SS_DEBUG_LOG=log_path, SS_ALWAYS_ACTIVE='1')
+    if not front:
+        # unattended: the real mouse and keyboard must not reach the game (they scroll the camera
+        # and click the interface), and the cursor must not be in the screenshots
+        env.update(SS_NO_INPUT='1', SS_HIDE_CURSOR='1')
     if scheduled:
         env['SS_RUN_CMD'] = ';'.join(scheduled)
 
@@ -234,6 +255,9 @@ def main():
     parser.add_argument('--claim', action='append', default=[],
                         help='what a screenshot is supposed to show, for its reviewer: once for all shots, '
                              'or once per shot in time order. Required with --shots.')
+    parser.add_argument('--at', action='append', default=[], metavar='SECONDS:COMMAND',
+                        help='console command to run that many seconds after mission start; a command '
+                             'starting with @ is Lua, e.g. "8:@CameraSet(GetCamera(SS2_CAMERA_farm))" (repeatable)')
     parser.add_argument('--before', action='append', default=[], metavar='COMMAND',
                         help='console command to run ahead of the main one (repeatable)')
     parser.add_argument('--seconds', type=int, default=10,
@@ -253,7 +277,8 @@ def main():
 
     result = run_game(paths['run'], 'SS2.exe', ' '.join(args.command), log_path, shots=shots,
                       shot_base=os.path.join(shots_dir, args.out), width=args.width, front=args.front,
-                      keep_open=args.front and not shots, linger=args.seconds, before=args.before)
+                      keep_open=args.front and not shots, linger=args.seconds, before=args.before,
+                      timed=[(int(item.split(':', 1)[0]), item.split(':', 1)[1]) for item in args.at])
     for n, png in enumerate(result.shots):
         reviews.write_claim(png, args.claim[n if len(args.claim) > 1 else 0])
     if result.started is None:

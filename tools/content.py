@@ -13,12 +13,13 @@ ID plan (retail maxima: variants 8021, scripts 126, final elements 121282):
 Variant IDs stay below 65536 because some resource keys pack a part number
 into the high 16 bits.
 """
+import math
 import os
 import struct
 import tomllib
 
 import lualint
-from ssdb import emit
+from ssdb import emit, iter_chunks
 from sspack import Package
 
 SINGLE_BASE = 50000
@@ -43,6 +44,9 @@ EQUIPMENT_TABLES = (
 
 POSES = ('Stand', 'Crouch', 'Crawl')
 
+# One tile (the unit of every position in a mission file) in the engine's world units.
+TILE = 0.625
+
 # named times of day -> the retail AmbientLights row used for them
 LIGHTS = {'day': 106, 'night': 108, 'dusk': 65}
 
@@ -52,6 +56,15 @@ DIALOGUE_CHARS = (set(map(chr, range(0x20, 0x7F))) | set(map(chr, range(0x410, 0
                   | set('‘’“”–—…«»№™'))
 
 
+def _fields(data, span):
+    """{chunk id: (payload offset, length)} for the chunks inside data[span]; first of each id wins."""
+    start, length = span
+    found = {}
+    for cid, _, offset, size in iter_chunks(data, start, start + length):
+        found.setdefault(cid, (offset, size))
+    return found
+
+
 class Build:
     """One content build: the database being edited plus loose-resource output."""
 
@@ -59,7 +72,9 @@ class Build:
         self.db = db
         self.run_dir = run_dir
         self._packs = {}
+        self._heights = {}      # variant id -> height map or None
         self.resources = {}     # (pack name, file id) -> bytes
+        self.warnings = []      # things the author should know that do not stop the build
         self.common_script = ''
         self.test = False       # compile each mission's test.lua into its script
         self.skip_dialogue = False      # dialogues are logged, not shown (unattended runs)
@@ -73,6 +88,59 @@ class Build:
         pack = self.pack(pack_name)
         if src_id in pack:
             self.resources[(pack_name, dst_id)] = pack.read(src_id)
+
+    def height_map(self, variant_id):
+        """A retail variant's terrain heights as (columns, rows, values) in world units, or None.
+
+        The grid has one value per tile corner, row by row. Many levels carry a
+        1x1 grid: flat at that height, or all their terrain is in nested templates.
+        """
+        if variant_id not in self._heights:
+            grid = None
+            pack = self.pack('Terrain')
+            if variant_id in pack:
+                data = pack.read(variant_id)
+                fields = _fields(data, _fields(data, (0, len(data)))[1])
+                if 21 in fields:                                    # STerrainInfo
+                    info = _fields(data, fields[21])
+                    if 5 in info:                                   # heightMap
+                        array = _fields(data, info[5])
+                        columns = struct.unpack_from('<i', data, array[1][0])[0]
+                        rows = struct.unpack_from('<i', data, array[2][0])[0]
+                        raw = struct.unpack_from('<%dH' % (columns * rows), data, array[3][0])
+                        grid = (columns, rows, [value / 64.0 for value in raw])
+            self._heights[variant_id] = grid
+        return self._heights[variant_id]
+
+    def ground_height(self, variant_id, x, y):
+        """Terrain height in world units at tile position (x, y) of a retail variant.
+
+        Looks in the variant's own terrain first, then in nested templates that
+        are placed unrotated (the usual layout of a mission variant wrapped
+        around a complete level). None if the height cannot be worked out.
+        """
+        grid = self.height_map(variant_id)
+        if grid and grid[0] > 1:
+            columns, rows, values = grid
+            cx = min(max(x, 0.0), columns - 1.001)
+            cy = min(max(y, 0.0), rows - 1.001)
+            ix, iy = int(cx), int(cy)
+            fx, fy = cx - ix, cy - iy
+            at = lambda i, j: values[j * columns + i]
+            return ((at(ix, iy) * (1 - fx) + at(ix + 1, iy) * fx) * (1 - fy)
+                    + (at(ix, iy + 1) * (1 - fx) + at(ix + 1, iy + 1) * fx) * fy)
+        variants = self.db['TemplVariants']
+        for rect in self.db['Rects'].find(VariantID=variant_id):
+            half_w, half_h = rect['Width'] / 2, rect['Height'] / 2
+            if rect['Rotation'] % 360 != 0 or not (abs(x - rect['CenterX']) <= half_w
+                                                    and abs(y - rect['CenterY']) <= half_h):
+                continue
+            for nested in variants.find(TemplateID=rect['TemplateLink']):
+                height = self.ground_height(nested['ID'], x - (rect['CenterX'] - half_w),
+                                            y - (rect['CenterY'] - half_h))
+                if height is not None:
+                    return height + rect['DeltaZ']
+        return grid[2][0] if grid else None
 
     def write_resources(self):
         """Write loose files as <run>/<Pack>/<id>, replacing earlier SS2 output."""
@@ -135,15 +203,32 @@ def compile_mission(build, mission_dir):
         raise ValueError('%s: slot %d is already used' % (mission_dir, slot))
 
     # own template (so retail template roulette never picks this variant) and the variant itself
+    shell_template = db['Templates'].get(shell_row['TemplateID'])
     db['Templates'].clone(shell_row['TemplateID'], ids.single, UserName=tag)
     variants.clone(shell, variant_id, TemplateID=ids.single, ScriptID=ids.single, RndWeight=1.0,
                    **spec.get('variant', {}))
 
-    # level geometry: the shell's placement rows and variant-keyed resources
+    # level geometry: the shell's placement rows and variant-keyed resources.
+    # [[clear]] areas drop the shell's small pieces (trees, props) so a mission can
+    # build there: a nested template goes if its centre is inside the area and it is
+    # no larger than the area; a single object goes if it stands inside.
+    clears = [tuple(clear['area']) for clear in spec.get('clear', [])]
+
+    def cleared(table_name, row):
+        if table_name == 'Rects':
+            x, y, size = row['CenterX'], row['CenterY'], max(row['Width'], row['Height'])
+        elif table_name == 'FinalElements':
+            x, y, size = row['PosX'], row['PosY'], 0
+        else:
+            return False
+        return any(x0 <= x <= x1 and y0 <= y <= y1 and size <= max(x1 - x0, y1 - y0)
+                   for x0, y0, x1, y1 in clears)
+
     for table_name, column in PLACEMENT_TABLES.items():
         table = db[table_name]
         for row in list(table.find(**{column: shell})):
-            table.clone(row['ID'], ids.new(table_name), **{column: variant_id})
+            if not cleared(table_name, row):
+                table.clone(row['ID'], ids.new(table_name), **{column: variant_id})
     for pack_name in VARIANT_PACKS:
         build.copy_resource(pack_name, shell, variant_id)
 
@@ -177,6 +262,14 @@ def compile_mission(build, mission_dir):
         nested = templates.get(piece['id'])
         if nested is None:
             raise ValueError('%s: [[template]] id %d does not exist' % (mission_dir, piece['id']))
+        # Some retail templates are leftovers from before building data moved into the
+        # Buildings pack: their walls exist only as database rows the engine no longer draws.
+        nested_variants = [row['ID'] for row in variants.find(TemplateID=piece['id'])]
+        if not any(variant in build.pack('Buildings')
+                   or next(db['FinalElements'].find(VariantID=variant), None)
+                   or next(rects.find(VariantID=variant), None) for variant in nested_variants):
+            raise ValueError('%s: [[template]] id %d (%r) has nothing the engine can draw: no building '
+                             'data, objects or nested templates' % (mission_dir, piece['id'], nested['UserName']))
         x, y = piece['pos']
         rects.upsert(ids.new('Rects'), VariantID=variant_id, TemplateLink=piece['id'],
                      CenterX=x, CenterY=y, Width=nested['Width'], Height=nested['Height'],
@@ -210,8 +303,9 @@ def compile_mission(build, mission_dir):
             name_ids[name] = ids.new('WaypointNames')
             names.upsert(name_ids[name], UserName=name)
         new_id = ids.new('Waypoints')
+        # a waypoint normally sits on the ground whatever its z; fixed_height keeps the z given
         waypoints.upsert(new_id, UserName='%s\\%s' % (tag, name), VariantID=variant_id,
-                         NameID=name_ids[name])
+                         NameID=name_ids[name], Is3DPoint=1 if wp.get('fixed_height') else 0)
         x, y = wp['pos']
         build.resources[('Waypoints', new_id)] = waypoint_resource(
             x, y, wp.get('z', 0.0), wp.get('floor', 0), wp.get('rotation', 0))
@@ -280,16 +374,38 @@ def compile_mission(build, mission_dir):
                     mission_dir, unit.get('name'), ', '.join(missing)))
             build.resources[('Units', unit_id)] = route_resource([name_ids[name] for name in unit['route']])
 
-    # cameras: anchor is the point looked at (tiles, z up), angles in radians
+    # cameras: anchor is the point looked at ([x, y] on the ground, or [x, y, height above
+    # the ground]) and distance how far back the camera sits, in tiles like everything else
+    # in a mission file. The engine wants world units and an absolute height, so the ground
+    # height comes from the shell's terrain.
     cameras = db['Cameras']
     camera_ids = {}
     for cam in spec.get('camera', []):
         camera_ids[cam['name']] = ids.new('Cameras')
-        x, y, z = cam['anchor']
+        anchor = list(cam['anchor']) + [0.0] * (3 - len(cam['anchor']))
+        ground = build.ground_height(shell, anchor[0], anchor[1])
+        if ground is None:
+            # no terrain data (an underground level, for one): the anchor's own height is all there is
+            build.warnings.append('%s: camera %r: shell %d has no terrain height there; the anchor height '
+                                  'is taken from the level floor at 0' % (spec['name'], cam['name'], shell))
+            ground = 0.0
+        x, y, z = anchor[0] * TILE, anchor[1] * TILE, ground + anchor[2] * TILE
+        yaw, pitch = cam.get('yaw', 0.0), cam.get('pitch', -0.9)
+        # The engine slides the anchor along the line of sight down to height 0 and then keeps
+        # it inside the level's rectangle. Over high ground that point lies well ahead of what
+        # the camera looks at, and if it falls outside the level the whole view is pulled back.
+        ahead = z / math.tan(-pitch) / TILE if pitch < 0 else 0.0
+        foot_x, foot_y = anchor[0] - math.sin(yaw) * ahead, anchor[1] + math.cos(yaw) * ahead
+        if not (0 <= foot_x <= shell_template['Width'] and 0 <= foot_y <= shell_template['Height']):
+            raise ValueError(
+                '%s: camera %r looks at (%.0f, %.0f) from a direction that puts its sight line %.0f tiles '
+                'past that point before it reaches height 0, outside the %dx%d level; the engine would '
+                'shift the view. Look from the other side (yaw + 3.1416), use a steeper pitch, or aim '
+                'further from the edge.' % (mission_dir, cam['name'], anchor[0], anchor[1], ahead,
+                                            shell_template['Width'], shell_template['Height']))
         cameras.upsert(camera_ids[cam['name']], UserName='%s\\%s' % (tag, cam['name']),
-                       AnchorX=x, AnchorY=y, AnchorZ=z, Yaw=cam.get('yaw', -0.8),
-                       Pitch=cam.get('pitch', -0.7), Roll=0.0,
-                       Distance=cam.get('distance', 20.0), FOV=cam.get('fov', 35.0))
+                       AnchorX=x, AnchorY=y, AnchorZ=z, Yaw=yaw, Pitch=pitch, Roll=0.0,
+                       Distance=cam.get('distance', 32.0) * TILE, FOV=cam.get('fov', 35.0))
 
     # dialogues: text-only lines shown on the engine's letterbox dialogue screen
     dialogue_codes = {}

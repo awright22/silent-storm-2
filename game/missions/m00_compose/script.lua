@@ -1,20 +1,13 @@
--- m00_compose: checks that templates, objects, a patrol route and a dialogue
--- added by SS2 all work in the level.
-out( "SS2: m00_compose script running" )
+-- m00_compose: a level built from retail pieces, with a patrol and a dialogue.
+-- Pipeline test, not part of the campaign.
+
+SS2_Log( "m00_compose start" )
+
+BeginSequence( 1 )
 DividedDeploy()
-CameraSet( GetCamera( SS2_CAMERA_overview ) )
-out( "SS2: guard valid: ", IsValid( GetUnit( "guard" ) ) )
+CameraSet( GetCamera( SS2_CAMERA_clearing ) )
+SS2_Say( SS2_DIALOG_intro )
+CameraSet( GetCamera( SS2_CAMERA_team ) )
+EndSequence()
 
-function WatchGuard()
-	local i
-	for i = 1, 12 do
-		Sleep( 40 )
-		out( "SS2: guard to patrol_a ", GetDistance( GetPos( GetUnit( "guard" ) ), GetWaypointPos( "ss2_patrol_a" ) ),
-			" to patrol_b ", GetDistance( GetPos( GetUnit( "guard" ) ), GetWaypointPos( "ss2_patrol_b" ) ) )
-	end
-end
-StartThread( WatchGuard )
-
-out( "SS2: dialogue starts" )
-WaitForUI( DialogPlay( SS2_DIALOG_intro ) )
-out( "SS2: dialogue finished" )
+SS2_Log( "m00_compose briefing over" )

@@ -8,9 +8,10 @@ shell = 5354            # retail "Farm Complete", 48x32 tiles, snow
 party = [118, 116, 42, 120]     # Elf, Doug, Arvid, Yves (used when the mission is launched on its own)
 light = "night"
 
-# Layout (tiles): farmhouse x 24..40, y 1..13; barn x 5..23, y 15..31;
-# walled well yard in the north-west. The team arrives on the west edge behind
-# the barn, which tools/vismap.py shows no German can see (build/vis/).
+# Layout (tiles, +x east, +y north): farmhouse in the south-east (about x 26..39,
+# y 3..12), barn in the north-west (x 5..23, y 15..31), a walled yard with a well
+# in the south-west. The team arrives on the west edge beside the barn, which
+# tools/vismap.py shows no German can see (build/vis/).
 
 [diplomacy]
 neutral = [[0, 3], [1, 3]]      # player 3 is the contact: nobody shoots him until he is freed
@@ -112,20 +113,21 @@ player = 3
 logic = "Fear"
 
 # --- cameras ---
+# yaw 0 looks north (+x right, +y up the screen); yaw -1.5708 looks east (+x up the screen)
 
 [[camera]]
-name = "arrival"
-anchor = [8.0, 24.0, 0.0]
-yaw = -0.8
-pitch = -0.8
-distance = 34.0
+name = "farm"               # the whole farm, for the briefing
+anchor = [24.0, 15.0]
+yaw = 0.0
+pitch = -1.0
+distance = 100.0
 
 [[camera]]
-name = "farm"
-anchor = [28.0, 14.0, 0.0]
-yaw = -0.8
-pitch = -0.8
-distance = 60.0
+name = "arrival"            # from behind the team, looking east past the barn
+anchor = [9.0, 24.0]
+yaw = -1.5708
+pitch = -0.9
+distance = 40.0
 
 # --- dialogue ---
 

@@ -8,6 +8,21 @@ This file is the reviewer's brief. Whoever takes a screenshot hands the
 reviewer the image path and a one-line claim of what it is supposed to show,
 and nothing that argues the claim is true.
 
+## Writing the claim (for the author)
+
+The first review pass rejected most screenshots partly because the claims said
+things no image can show. A claim is a list of things a viewer can point to.
+
+- Say what should be **visible and where**: "four figures stand among trees in
+  the lower right; a farmhouse with a smoking chimney is upper centre".
+- Give **counts**: how many units, buildings, interface entries.
+- Say the **state** the picture should be in: day or night, real time or
+  turn-based, dialogue open or not, which party is in the unit panel.
+- Leave out what cannot be seen: level names and IDs, sizes in tiles, who
+  placed something, which camera record was used, that a cheat was on.
+- One screenshot, one purpose. If it is evidence that three things were added,
+  all three must be identifiable in the frame.
+
 ## The reviewer's job
 
 Assume the screenshot is wrong until the image itself shows otherwise. You are
