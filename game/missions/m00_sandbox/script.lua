@@ -7,7 +7,7 @@ raiders = GetGroup( SS2_GROUP_raiders )
 out( "SS2: raiders placed: ", GroupGetSize( raiders ) )
 
 DividedDeploy()
-CameraSet( GetCamera( SS2_CAMERA_gate ) )
+CameraSet( GetCamera( SS2_CAMERA_overview ) )
 SetDiplomacy( 2, 0, DS_ENEMY )
 SetDiplomacy( 0, 2, DS_ENEMY )
 
