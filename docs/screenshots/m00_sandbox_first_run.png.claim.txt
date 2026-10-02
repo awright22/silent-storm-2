@@ -1,0 +1,1 @@
+SS2 sandbox mission on the retail City Bank level: hostile units in suits and hats placed by SS2 stand on the plaza, seen through a camera defined by SS2, with enemy markers over them; the mission interface is in turn-based combat.

@@ -24,6 +24,7 @@ import subprocess
 import build
 import config
 import content
+import reviews
 import run as game_run
 from ssdb import Database
 
@@ -104,6 +105,16 @@ def survey_one(survey_dir, map_id, variant):
     return {'status': 'loaded', 'seconds': round(result.started)}
 
 
+def write_claims(results, shots):
+    """Give every survey screenshot the claim its reviewer checks it against."""
+    for variant, r in results.items():
+        png = os.path.join(shots, '%s.png' % variant)
+        if os.path.exists(png):
+            reviews.write_claim(png, 'Overview of the retail level "%s" (%dx%d tiles), loaded as an empty SS2 '
+                                     'mission with no units placed by SS2. The camera is centred on the level '
+                                     'and looks steeply down at it.' % (r['name'], r['width'], r['height']))
+
+
 def write_report(results, path):
     """docs/locations.md: every surveyed level, smallest first."""
     rows = sorted(results.items(), key=lambda kv: (kv[1]['width'] * kv[1]['height'], int(kv[0])))
@@ -144,6 +155,7 @@ def main():
         with open(results_path, encoding='utf-8') as f:
             results = json.load(f)
     if args.report:
+        write_claims(results, shots)
         write_report(results, os.path.join(config.REPO, 'docs', 'locations.md'))
         return
 
@@ -161,6 +173,7 @@ def main():
         results[key] = result
         with open(results_path, 'w', encoding='utf-8') as f:
             json.dump(results, f, indent=1, sort_keys=True)
+        write_claims({key: result}, shots)
         print('%5d %-34s %3dx%-3d %s %ss' % (variant, template['UserName'][:34], template['Width'],
                                              template['Height'], result['status'], result.get('seconds', '-')),
               flush=True)

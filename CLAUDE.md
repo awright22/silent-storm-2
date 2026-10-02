@@ -38,6 +38,11 @@ Storm 2 or on any part of the game. Take the time to do things right.
   leave a known gap in order to finish sooner or spend less.
 - Verify work in the running game before calling it done, and say plainly what
   was and was not verified.
+- **Every screenshot of the game gets an adversarial reviewer agent** (owner's
+  instruction, 2026-10-02). Nothing is concluded from a screenshot until the
+  `screenshot-reviewer` agent has reviewed it against a one-line claim. The
+  brief and the review format are in `docs/screenshot-review.md`; open
+  findings are tracked in `docs/qa/visual-issues.md`.
 
 ## Project Structure
 

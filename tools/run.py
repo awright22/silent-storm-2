@@ -1,15 +1,20 @@
 """Launch the staged SS2 build and capture what it shows.
 
-    python tools/run.py <console command ...> [--shots 5,20] [--out name] [--front]
+    python tools/run.py <console command ...> [--shots 5,20 --claim TEXT] [--out name] [--front]
 
-    python tools/run.py map 50010 118 116 42 120 --shots 5,30 --out m01
+    python tools/run.py map 50010 118 116 42 120 --shots 5 --out m01
+        --claim "Night view of the farm's south-east corner with the four-person team among the trees"
 
 The console command (e.g. "map 50010 ...") becomes a one-line cfg the engine
 executes at boot. Shot times count from the moment the mission starts (the
 engine's "Start game" message), so they do not depend on how long the map
 takes to load. The game's debug output (engine messages and script out()
 calls) goes to build/shots/<name>.log, and the game is closed after the last
-shot.
+shot, or after --seconds when no shots are taken.
+
+Every screenshot must come with a claim: one line saying what it is supposed
+to show. It is saved next to the image for the adversarial reviewer
+(docs/screenshot-review.md, tools/reviews.py).
 
 This uses the engine port's test hooks (SS_DEBUG_LOG, SS_RUN_CMD with the
 "screenshot" console command, SS_ALWAYS_ACTIVE), so nothing depends on the
@@ -28,6 +33,7 @@ import zlib
 from ctypes import wintypes
 
 import config
+import reviews
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -129,13 +135,14 @@ class Run:
 
 
 def run_game(run_dir, exe_name, command, log_path, shots=(), shot_base=None, until=(), until_timeout=60,
-             width='1024', front=False, keep_open=False, load_timeout=LOAD_TIMEOUT):
+             width='1024', front=False, keep_open=False, linger=0, load_timeout=LOAD_TIMEOUT):
     """Launch the game on a console command and watch it.
 
     shots: seconds after mission start at which to save <shot_base>_NN.png.
     until: texts; the run ends as soon as the log contains one of them, or
     until_timeout seconds after the mission starts. With "until", shots due
     after the match are not taken.
+    linger: with neither shots nor until, seconds to let the mission run.
     keep_open: leave the game running until the player closes it.
     """
     with open(os.path.join(run_dir, 'cfg', 'ss2_run.cfg'), 'w', newline='\r\n') as f:
@@ -182,8 +189,8 @@ def run_game(run_dir, exe_name, command, log_path, shots=(), shot_base=None, unt
                 break
 
         if result.started is not None:
-            # what ends the run: an "until" text, else the last screenshot, else nothing to wait for
-            deadline = time.time() + (until_timeout if until else max(shots) + 20 if shots else 0)
+            # what ends the run: an "until" text, else the last screenshot, else "linger" seconds
+            deadline = time.time() + (until_timeout if until else max(shots) + 20 if shots else linger)
             while proc.poll() is None:
                 log = read_log(log_path)
                 if CRASHED in log:
@@ -196,8 +203,6 @@ def run_game(run_dir, exe_name, command, log_path, shots=(), shot_base=None, unt
                     if all(os.path.exists(bmp) for bmp in shot_files):
                         time.sleep(0.5)     # let the last file finish writing
                         break
-                elif not keep_open:
-                    break
                 if not keep_open and time.time() > deadline:
                     break
                 time.sleep(0.5)
@@ -225,6 +230,11 @@ def main():
     parser.add_argument('--out', default='run', help='base name for build/shots/<name>*.png and .log')
     parser.add_argument('--width', default='1024', help='window width: 640, 800, 1024 or 1280')
     parser.add_argument('--front', action='store_true', help='open the window normally, for playing by hand')
+    parser.add_argument('--claim', action='append', default=[],
+                        help='what a screenshot is supposed to show, for its reviewer: once for all shots, '
+                             'or once per shot in time order. Required with --shots.')
+    parser.add_argument('--seconds', type=int, default=10,
+                        help='without --shots: how long to let the mission run before closing it (default 10)')
     args = parser.parse_args()
 
     paths = config.load()
@@ -232,14 +242,17 @@ def main():
     os.makedirs(shots_dir, exist_ok=True)
     if find_window('SS2.exe'):
         sys.exit('an SS2.exe window is already open')
-    shots = [int(s) for s in args.shots.split(',') if s]
-    if not shots and not args.front:
-        shots = [5]
+    shots = sorted(int(s) for s in args.shots.split(',') if s)
+    if shots and len(args.claim) not in (1, len(shots)):
+        sys.exit('--shots needs --claim: one for all shots or one per shot. Every screenshot is reviewed '
+                 'against its claim (docs/screenshot-review.md).')
     log_path = os.path.join(shots_dir, args.out + '.log')
 
     result = run_game(paths['run'], 'SS2.exe', ' '.join(args.command), log_path, shots=shots,
                       shot_base=os.path.join(shots_dir, args.out), width=args.width, front=args.front,
-                      keep_open=args.front and not shots)
+                      keep_open=args.front and not shots, linger=args.seconds)
+    for n, png in enumerate(result.shots):
+        reviews.write_claim(png, args.claim[n if len(args.claim) > 1 else 0])
     if result.started is None:
         print('mission did not start (%s)' % (
             'crashed' if result.crashed else
@@ -249,6 +262,8 @@ def main():
         print('mission started %.0fs after launch' % result.started)
     for png in result.shots:
         print(png)
+    if result.shots:
+        print('these screenshots need a reviewer: python tools/reviews.py')
     if result.crashed:
         print('the game crashed: see the stack at the end of the log')
     print('log: %s' % log_path)
